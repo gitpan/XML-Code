@@ -2,7 +2,7 @@ package XML::Code;
 
 use vars qw ($VERSION);
 
-$VERSION = '0.1';
+$VERSION = '0.2';
 
 sub new{
 	my $who = shift;
@@ -65,23 +65,23 @@ sub set_text{
 }
 
 sub text{
-   $this = shift;
+   my $this = shift;
    return $this->{'text'};
 }
 
 sub code{
 	my $this = shift;
-	my $tab_level = shift;
-	my $suppress_tab = shift;
+	my $tab_level = shift || 0;
+	my $suppress_tab = shift || 0;
 	
 	$suppress_tab = 1 if $tab_level == -1;
 
 	my $tab = "\t" x ($tab_level) unless $suppress_tab;
 	
 	my $name = $this->{'<name>'};
-	my $text = $this->{'<text>'};
+	my $text = $this->{'<text>'} || '';
 	
-	my $code;
+	my $code = '';
 	
 	my $prolog;
 	$prolog = " version=\"$this->{'<version>'}\"" if $this->{'<version>'};
@@ -109,7 +109,7 @@ sub code{
     	
     	if (scalar @$children){
     	   $code .= $text ? ">$text" : ">\n"; 
-    	   for ($count = 0; $count != scalar @$children; $count++){
+    	   for (my $count = 0; $count != scalar @$children; $count++){
     	   	   $code .= $$children[$count]->code ($tab_level != -1 ? $tab_level + 1 : -1, 
 			   	   $count == 0 && length ($text) ? 1 : 0);
     	   }
