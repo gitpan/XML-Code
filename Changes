@@ -1,4 +1,7 @@
 History of XML::Code perl module.
 
+0.3 Sun March 28, 2004
+   Two basic tests added: test.pl and t/use.t.
+
 0.2 Sun March 21, 2004
    Start of existence.
