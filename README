@@ -21,7 +21,6 @@ Standard way of installing:
 
 perl Makefile.PL
 make
-make test
 make install
 
 /*
@@ -29,8 +28,6 @@ make install
 */
 
 Information on using XML::Code is contained in Code.pm file ad pod parts.
-
-Basic usage of XML::Code is demonstrated in test.pl file.
 
 Full description of the latest release of XML::Code module is also available 
 in Russian at http://webcode.ru/cgi/xml-code/.

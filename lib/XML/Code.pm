@@ -2,20 +2,26 @@ package XML::Code;
 
 use vars qw ($VERSION);
 
-$VERSION = '0.3';
+$VERSION = '0.4';
 
 sub new{
 	my $who = shift;
 	my $class = ref ($who) || $who;
 	my $this = {
 	   '<name>' => shift,
-	   '<children>' => []};
+	   '<children>' => [],
+	   '<escape>' => 1};
 	return bless $this, $class;
 }
 
 sub version{
 	my $this = shift;
 	$this->{'<version>'} = shift;
+}
+
+sub doctype{
+	my $this = shift;
+	$this->{'<doctype>'} = shift;
 }
 
 sub encoding{
@@ -52,10 +58,32 @@ sub name{
 	return $this->{'<name>'};
 }
 
+sub escape{
+	my $this = shift;
+	my $escape = shift;
+	$this->{'<escape>'} = $escape; 
+}
+
 sub add_child{
 	my $this = shift;
 	my $children = shift;
 	push @{$this->{'<children>'}}, $children; 
+}
+
+sub add_textnode{
+	my $this = shift;
+	my $text = shift;
+	my $textnode = new XML::Code ('=');
+	$textnode->escape ($this->{'<escape>'});
+	$textnode->set_text ($text);
+	push @{$this->{'<children>'}}, $textnode; 
+}
+
+sub add_empty{
+	my $this = shift;
+	my $name = shift;
+	my $emptynode = new XML::Code ($name);
+	push @{$this->{'<children>'}}, $emptynode; 
 }
 
 sub set_text{
@@ -80,31 +108,40 @@ sub code{
 	
 	my $name = $this->{'<name>'};
 	my $text = $this->{'<text>'} || '';
-	
+	my $escape = $this->{'<escape>'};
+
 	my $code = '';
 	
 	my $prolog;
 	$prolog = " version=\"$this->{'<version>'}\"" if $this->{'<version>'};
 	$prolog .= " encoding=\"$this->{'<encoding>'}\"" if $this->{'<encoding>'};
 	$code = "<?xml$prolog?>\n" if $prolog;
+	$code .= "<!DOCTYPE $this->{'<doctype>'}>\n" if $this->{'<doctype>'};
 	$code .= "<?xml-stylesheet type=\"text/xsl\" href=\"$this->{'<stylesheet>'}\"?>\n"
 		if $this->{'<stylesheet>'};
+
+	$text = escape_text ($text) if $escape;
 	
 	if ($name eq '!'){
-	   $code .= "$tab<!-- " . escape ($text) . " -->\n";
+	   $code .= "$tab<!-- $text -->\n";
 	}
 	
 	elsif ($name eq '?'){
-	   $code .= "$tab<?" . escape ($text) . "?>\n";
+	   $code .= "$tab<?$text?>\n";
 	}
+	
+	elsif ($name eq '='){
+	   $code .= $text;
+	}	
 	
 	else{  	
     	my $children = $this->{'<children>'};
     	
     	$code .= "$tab<$name";
-    	foreach my $attribute (keys %$this){
-    		$code .= " $attribute=\"" . escape ($this->{$attribute}) . "\"" 
-    		   unless $attribute =~ m{^<};
+    	foreach my $attribute (sort keys %$this){
+		    my $value = $this->{$attribute};
+			$value = escape_text ($value) if $escape;
+    		$code .= " $attribute=\"$value\"" unless $attribute =~ m{^<};
     	}
     	
     	if (scalar @$children){
@@ -113,17 +150,17 @@ sub code{
     	   	   $code .= $$children[$count]->code ($tab_level != -1 ? $tab_level + 1 : -1, 
 			   	   $count == 0 && length ($text) ? 1 : 0);
     	   }
-    	   $code .= "$tab</$this->{'<name>'}>\n";
+    	   $code .= "$tab</$name>\n";
     	}
     	else{
-    	   $code .= $text ? ">" . escape ($text) . "</$name>\n" : "/>\n"; 
+    	   $code .= $text ? ">$text</$name>\n" : "/>\n"; 
     	}
 	}
 	
 	return $code;
 }
 
-sub escape{
+sub escape_text{
 	my $text = shift;
 	$text =~ s{\&}{\&amp;}gm;
 	$text =~ s{<}{\&lt;}gm;
@@ -149,6 +186,7 @@ XML::Code - Perl module for converting XML hash structures into plain text.
    $sub_content = new XML::Code ('sub-content');
    $content->add_child ($sub_content);
    $sub_content->set_text ('text node');
+	$content->add_empty ('hr');
 
    print $content->code();
 
@@ -163,6 +201,9 @@ XML::Code - Perl module for converting XML hash structures into plain text.
    $content->version ('1.0');
    $content->encoding ('Windows-1251');
    $content->stylesheet ('test.xslt');
+	
+	# Adding !DOCTYPE declaration.
+	$content->doctype ('wml PUBLIC "-//WAPFORUM//DTD WML 1.1//EN" "http://www.wapforum.org/DTD/wml_1.1.xml"');	
 
    # Adding attribute.
    $content->{'level'} = 'top';
@@ -181,6 +222,9 @@ XML::Code - Perl module for converting XML hash structures into plain text.
    $content->comment ('This is a comment & more');
    $content->pi ("instruction intro=\"hi\"");
 
+	# Add an empty node <br/>.
+	$content->add_empty ('br'); 
+	
    # Producing plain text XML code.
    print $content->code();
 
@@ -226,7 +270,35 @@ If you have a node, you may access its attributes as if you have a hash referenc
 
 =head3 set_text()
 
-Sets some text value of the node. Note that you still may add children to the node.
+Sets some text value of the node. Note that you still may add children to the node. 
+When you adds both plain text and child node, text value always appears before any child 
+when calling code() method. 
+
+=head3 add_textnode()
+
+If you need to construct mixed content of a node like this:
+
+   <p><b>Selected</b> text <i>follows</i>.</p>
+	
+you may call add_textnode() to insert plain text at a certain position:
+
+   $p->add_child ($b);
+	$p->add_textnode (' text ');
+	$p->add_child ($i);
+
+=head3 escape()
+
+Normally any content of the node will be escaped during rendering (i. e. special symbols like '&' 
+will be replaced by corresponding entities). Call escape() with zero argument to prevent it:
+
+   my $p = new XML::Code ('p');
+	$p->set_text ("&#8212;");
+	$p->escape (0);
+	print $p->code(); # prints <p>&#8212;</p>
+	$p->escape (1);
+	print $p->code(); # prints <p>&amp;#8212;</p>
+		
+Escape action set by calling escape() affects tag attributes as well.
 
 =head3 add_child()
 
@@ -238,6 +310,13 @@ child object in the first case):
    1. my $child = new XML::Code ('child'); $parent->add_child ($child);
    2. $parent->add_child (new XML::Code ('child'));
 
+=head3 add_empty()
+
+It is too boring to call constructor XML::Code() and add_child() to add an empty tag into resulting tree.
+Method add_empty() created an empty tag and inserts it into the current position:
+
+   $p->add_empty ('br'); # adds <br/> within <p>...</p>.  
+	
 =head2 Getting information
 
 =head3 name()
@@ -278,6 +357,14 @@ in the output. Normally these methods shold be applied to a top-level tag.
 
 Inserts <?xml-stylesheet?> instruction into resulting code so that resulting XML file may be
 transformed with some external XSLT-file.
+
+=head3 doctype()
+
+Adds !DOCTYPE instruction into output code.
+   
+	my $xml = new XML::Code ('wml');
+	$xml->version ("1.0");
+	$xml->doctype ('wml PUBLIC "-//WAPFORUM//DTD WML 1.1//EN" "http://www.wapforum.org/DTD/wml_1.1.xml"');	  
 
 =head2 Generating code
 

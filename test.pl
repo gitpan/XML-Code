@@ -26,4 +26,6 @@ $sub4->set_text ('text of sub4');
 $content->comment ('This is a comment & more');
 $content->pi ("instruction intro=\"hi\"");
 
+$content->add_empty ('hr');
+
 print $content->code();
